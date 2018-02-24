@@ -8,6 +8,9 @@ import re
 from datetime import date
 import pandas as pd
 
+# Introducing Abstract Base Classes
+from abc import ABC, abstractmethod
+
 # Storing and fetching data
 import dill as pickle
 
@@ -15,11 +18,33 @@ import dill as pickle
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
 """
-This module consists of the DataFrameProvider class. This class loads and transforms data. This module further provides 
+This module contains the DataFrameProvider class. This class loads and transforms data. This module further provides 
 functions for reformatting data frames beyond the initial transformations.
 """
 
-class DataFrameProvider(object):
+
+class AbstractDataFrameProvider(ABC):
+    """
+    Implementations of this abstract class are used as an imput to a machine/deep learning model. The data is formatted
+    via a rolling window. The target variable vector is provided via the instance variable rawYDataFrame. The feature
+    matrix is provided via an implementation of the abstract method getFeaturesDF() as a pandas.DataFrame type.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.rawXDataFrame = None
+        self.rawYDataFrame = None
+
+    @abstractmethod
+    def getFeaturesDF(self):
+        """
+        An implementation of this method should provided the formatted features.
+        :return: A pandas.DataFrame, containing the formatted features.
+        """
+        pass
+
+
+class DataFrameProvider(AbstractDataFrameProvider):
     """
     This class implements the formatting of the data stored in .xlsx files.
     Namely the reported number of influenza infections, the google trends data and
@@ -41,8 +66,9 @@ class DataFrameProvider(object):
     this class. Final specifications can be made at this point.
     """
 
-    def __init__(self, lagToCurrentWeek=1, influenzaPerStateWeeks=12, influenzaGermanyWeeks=12, \
-                                trendPerStateWeeks=12, trendGermanyWeeks=12, weatherWeeks=12):
+    def __init__(self, lagToCurrentWeek=1, influenzaPerStateWeeks=12, influenzaGermanyWeeks=12,
+                 trendPerStateWeeks=12, trendGermanyWeeks=12, weatherWeeks=12, number_of_temp_intervals=2,
+                 number_of_humid_intervals=2, number_of_prec_intervals=2, encode_states=False, encode_weeks=False):
         """
         If the constructor parameters correspond to a previously stored dataframes. The
         previous dataframes is loaded. Otherwise the method :func:`~DataFormatting.DataFrameProvider.__createNewRawDataFrame`
@@ -54,6 +80,16 @@ class DataFrameProvider(object):
         :param trendPerStateWeeks:  An int, the number of weeks of past google trends data per state in the rolling window.
         :param trendGermanyWeeks:  An int, the number of weeks of past google trends data in Germany in the rolling window.
         :param weatherWeeks:  An int, the number of weeks of past weather data in the rolling window.
+        :param number_of_temp_intervals: An int, the number of equally sized intervals into which the temperature data
+        is divided.
+        :param number_of_humid_intervals: An int, the number of equally sized intervals into which the humidity data
+        is divided.
+        :param number_of_prec_intervals: An int, the number of equally sized intervals into which the precipitation data
+        is divided.
+        :param encode_states: A bool, specifying whether the encoded states should be included in the returned data
+        frame.
+        :param encode_weeks: A bool, specifying whether the encoded weeks should be included in the returned data
+        frame.
         """
 
         self.__lagToCurrentWeek = lagToCurrentWeek
@@ -62,6 +98,12 @@ class DataFrameProvider(object):
         self.__trendPerStateWeeks = trendPerStateWeeks
         self.__trendGermanyWeeks = trendGermanyWeeks
         self.__weatherWeeks = weatherWeeks
+
+        self.number_of_temp_intervals = number_of_temp_intervals
+        self.number_of_humid_intervals = number_of_humid_intervals
+        self.number_of_prec_intervals = number_of_prec_intervals
+        self.encode_states = encode_states
+        self.encode_weeks = encode_weeks
 
         # Checking if the a dataframe has already been formatted and stored in the past.
         # If so, in the following the formatting of the stored dataframes is compared to the
@@ -483,25 +525,23 @@ class DataFrameProvider(object):
     # The feature data frame (pandas.DataFrame) is constructed
     ########################################
 
-    def getFeaturesDF(self, number_of_temp_intervals=2, number_of_humid_intervals=2, number_of_prec_intervals=2,
-                      encode_states=False, encode_weeks=False):
+    def getFeaturesDF(self):
         """
         This public method provides the data frame (pandas.DataFrame) in the specified format. It uses the previously
         formatted raw data frames (instance variabiles) and does the final reformatting of the weather features. This
-        final reformatting is done according to these specified parameters. For each of the intervals into which the
+        final reformatting is done according to the instance variables. For each of the intervals into which the
         temperature, humidity and precipitation data is divided the interval mean, variance, min and max is calculated
         and used as feature in the returned pandas.DataFrame object.
-        :param number_of_temp_intervals: An int, the number of equally sized intervals into which the temperature data
-        is divided.
-        :param number_of_humid_intervals: An int, the number of equally sized intervals into which the humidity data
-        is divided.
-        :param number_of_prec_intervals: An int, the number of equally sized intervals into which the precipitation data
-        is divided.
-        :param encode_states:
         :return: A pandas.DataFrame, this data frame contains the influenza, google trends and weather features in a
         rolling window format as specified by the constructor parameters of this class and the parameters of this
         method.
         """
+
+        number_of_temp_intervals = self.number_of_temp_intervals
+        number_of_humid_intervals = self.number_of_humid_intervals
+        number_of_prec_intervals = self.number_of_prec_intervals
+        encode_states = self.encode_states
+        encode_weeks = self.encode_weeks
 
         # Selecting the temperature, humidity and precipitation related columns.
         temperature_df = self.rawXDataFrame[

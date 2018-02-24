@@ -894,11 +894,9 @@ def visualize_wave_start_vs_length_via_heatmap(input_df, states=['all']):
 
 class ForecastProvider(object):
 
-    def __init__(self, states_list=['all'], no_2009_bool=True, only_seasonal_weeks_bool=False,
-                 weeks_in_advance_int=11,
-                 feature_week_period=12,
-                 classification_pipeline_per_week_list=[Pipeline(
-                     steps=[('preprocessing', StandardScaler()),
+    def __init__(self, data_frame_provider=DataFrameProvider(), states_list=['all'], no_2009_bool=True,
+                 only_seasonal_weeks_bool=False, weeks_in_advance_int=11, classification_pipeline_per_week_list=
+                 [Pipeline(steps=[('preprocessing', StandardScaler()),
                             ('regressor', MLPClassifier(hidden_layer_sizes=(20, 20, 10), alpha=1,
                                                         learning_rate='adaptive', batch_size=3000,
                                                         random_state=1341, max_iter=1000))])]*11,
@@ -913,13 +911,13 @@ class ForecastProvider(object):
         a comprehensive evaluation with respect to all years. In addition, get_formatted_pred_probas_and_actual_values
         returns the data needed for the animation presented via the associated webapp.
 
+        :param data_frame_provider: A AbstractDataFrameProvider, providing the data for the forecast.
         :param states_list: A list[str], of state names which are not removed from the data set.
         :param no_2009_bool: A bool, indicating whether the outlier year 2009 in which the swine flu occurred should be
         excluded.
         :param only_seasonal_weeks_bool: A bool, indicating whether only data from the cold weather season of a year should
         be included.
         :param weeks_in_advance_int: An int, the number of forecasting weeks.
-        :param feature_week_period: An int, indicating for how many weeks in the past the features are considered.
         :param classification_pipeline_per_week_list: A list, of classification pipelines or models each entry
         corresponds to one forecasting distance.
         :param excluded_features_list: A list[str], containing strs which lead to excluding a column with a name containing
@@ -935,24 +933,16 @@ class ForecastProvider(object):
         self.no_2009_bool = no_2009_bool
         self.only_seasonal_weeks_bool = only_seasonal_weeks_bool
         self.weeks_in_advance_int = weeks_in_advance_int
-        self.feature_week_period = feature_week_period
         self.classification_pipeline_per_week_list = classification_pipeline_per_week_list
         self.excluded_features_list = excluded_features_list
-
+        # This class provides the data.
+        self.data_frame_provider = data_frame_provider
 
         # Generating Features and Target Variables
-        # This class provides the data.
-        data_frame_provider = DataFrameProvider(lagToCurrentWeek=1, influenzaPerStateWeeks=feature_week_period,
-                                                     influenzaGermanyWeeks=feature_week_period,
-                                                     trendPerStateWeeks=feature_week_period,
-                                                     trendGermanyWeeks=feature_week_period,
-                                                     weatherWeeks=feature_week_period)
+
         # Getting the feature data frame and selecting the time steps over which the min, max, mean and variance of the
         # weather is calculated.
-        weather_trend_influenza_df = data_frame_provider.getFeaturesDF(number_of_temp_intervals=6,
-                                                                     number_of_humid_intervals=3,
-                                                                     number_of_prec_intervals=3,
-                                                                     encode_weeks=False, encode_states=False)
+        weather_trend_influenza_df = data_frame_provider.getFeaturesDF()
         # Storing the list of year, week tuples.
         self.complete_unique_year_week_list = weather_trend_influenza_df['year_week'].unique()
 
@@ -1483,13 +1473,12 @@ def save_formatted_pred_probas_and_actual_values(states_list=['all'], no_2009_bo
     if not re.search('[^a-zA-Z0-9]', file_str) is None:
         raise ValueError('The file str is only allowed be empty or to contain the chars a-zA-Z0-9.')
 
-    forecast_provider = ForecastProvider(states_list=states_list, no_2009_bool=no_2009_bool,
-                                         only_seasonal_weeks_bool=only_seasonal_weeks_bool,
-                                         weeks_in_advance_int=weeks_in_advance_int,
-                                         wave_thresholds=wave_thresholds,
+    data_frame_provider = DataFrameProvider()
+    forecast_provider = ForecastProvider(data_frame_provider=data_frame_provider, states_list=states_list,
+                                         no_2009_bool=no_2009_bool, only_seasonal_weeks_bool=only_seasonal_weeks_bool,
+                                         weeks_in_advance_int=weeks_in_advance_int, wave_thresholds=wave_thresholds,
                                          feature_week_period=feature_week_period,
-                                         classification_pipeline_per_week_list=
-                                         classification_pipeline_per_week_list,
+                                         classification_pipeline_per_week_list=classification_pipeline_per_week_list,
                                          excluded_features_list=excluded_features_list)
 
     output_by_week_list, output_by_year_state_dict, output_temporal_dict = \
